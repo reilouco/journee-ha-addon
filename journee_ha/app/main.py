@@ -104,6 +104,8 @@ def load_options() -> Dict[str, Any]:
         "smtp_from_name": "Journée HA",
         "smtp_use_tls": True,
         "default_recipients": [],
+        "automation_token": "",
+        "automation_subject": "Relatório semanal - Journée",
     }
 
     if not OPTIONS_FILE.exists():
@@ -176,6 +178,120 @@ def clean_location(location: Dict[str, Any]) -> Dict[str, Any]:
         "fixed_departure": str(location.get("fixed_departure", "")).strip(),
         "notes": str(location.get("notes", "")).strip(),
     }
+def value_with_margin(base: int, variation: int, enabled: bool) -> Dict[str, int]:
+    base = int(base or 0)
+    variation = int(variation or 0)
+
+    minimum = max(0, base - variation)
+    maximum = max(minimum, base + variation)
+
+    if enabled and variation > 0:
+        value = random.randint(minimum, maximum)
+    else:
+        value = base
+
+    value = max(minimum, min(maximum, value))
+
+    return {
+        "value": value,
+        "min": minimum,
+        "max": maximum,
+    }
+
+
+def distribute_delta(elements: List[Dict[str, int]], delta: int) -> int:
+    """
+    Tenta distribuir uma diferença de tempo entre vários campos ajustáveis.
+
+    delta > 0:
+        precisa esticar durações/deslocamentos.
+
+    delta < 0:
+        precisa encolher durações/deslocamentos.
+
+    Retorna o que não conseguiu distribuir.
+    """
+    remaining = int(delta or 0)
+
+    if remaining == 0:
+        return 0
+
+    direction = 1 if remaining > 0 else -1
+
+    while remaining != 0:
+        adjustable = []
+
+        for element in elements:
+            if direction > 0:
+                capacity = element["max"] - element["value"]
+            else:
+                capacity = element["value"] - element["min"]
+
+            if capacity > 0:
+                adjustable.append((element, capacity))
+
+        if not adjustable:
+            break
+
+        total_capacity = sum(capacity for _, capacity in adjustable)
+        amount_to_apply = min(abs(remaining), total_capacity)
+
+        shares = []
+        applied = 0
+
+        for element, capacity in adjustable:
+            raw_share = amount_to_apply * capacity / total_capacity
+            share = int(raw_share)
+            fraction = raw_share - share
+
+            shares.append(
+                {
+                    "element": element,
+                    "capacity": capacity,
+                    "share": share,
+                    "fraction": fraction,
+                }
+            )
+
+            applied += share
+
+        remainder = amount_to_apply - applied
+
+        shares.sort(key=lambda item: item["fraction"], reverse=True)
+
+        index = 0
+        while remainder > 0 and shares:
+            shares[index % len(shares)]["share"] += 1
+            remainder -= 1
+            index += 1
+
+        actually_applied = 0
+
+        for item in shares:
+            element = item["element"]
+            capacity = item["capacity"]
+            share = min(item["share"], capacity)
+
+            if share <= 0:
+                continue
+
+            element["value"] += direction * share
+            actually_applied += share
+
+        if actually_applied <= 0:
+            break
+
+        remaining -= direction * actually_applied
+
+    return remaining
+
+
+def next_fixed_arrival_index(locations: List[Dict[str, Any]], start_index: int) -> Optional[int]:
+    for index in range(start_index, len(locations)):
+        if parse_time(locations[index].get("fixed_arrival")) is not None:
+            return index
+
+    return None
 
 
 def calculate_day(day: Dict[str, Any], randomize_enabled: bool = True) -> Dict[str, Any]:
@@ -194,11 +310,33 @@ def calculate_day(day: Dict[str, Any], randomize_enabled: bool = True) -> Dict[s
     locations = [clean_location(item) for item in raw_locations]
     locations = [item for item in locations if item["name"]]
 
-    for index, location in enumerate(locations):
-        fixed_arrival = parse_time(location.get("fixed_arrival"))
-        fixed_departure = parse_time(location.get("fixed_departure"))
+    def append_calculated(location: Dict[str, Any], arrival: int, duration: int, travel: int) -> None:
+        nonlocal total_work, total_travel
 
-        arrival = current
+        departure = arrival + duration
+
+        calculated.append(
+            {
+                "name": location["name"],
+                "arrival": format_time(arrival),
+                "departure": format_time(departure),
+                "duration": duration,
+                "duration_formatted": format_duration(duration),
+                "travel": travel,
+                "travel_formatted": format_duration(travel),
+                "notes": location.get("notes", ""),
+            }
+        )
+
+        total_work += max(0, duration)
+        total_travel += max(0, travel)
+
+    index = 0
+
+    while index < len(locations):
+        location = locations[index]
+
+        fixed_arrival = parse_time(location.get("fixed_arrival"))
 
         if fixed_arrival is not None:
             if fixed_arrival > current:
@@ -218,73 +356,187 @@ def calculate_day(day: Dict[str, Any], randomize_enabled: bool = True) -> Dict[s
                     }
                 )
 
-            arrival = fixed_arrival
+            current = fixed_arrival
 
-        if fixed_departure is not None:
-            departure = fixed_departure
+        target_index = next_fixed_arrival_index(locations, index + 1)
 
-            if departure < arrival:
-                warnings.append(
+        if target_index is not None:
+            target_location = locations[target_index]
+            target_arrival = parse_time(target_location.get("fixed_arrival"))
+
+            segment_items = []
+            adjustable_elements = []
+
+            predicted = current
+
+            for segment_index in range(index, target_index):
+                segment_location = locations[segment_index]
+
+                fixed_departure = parse_time(segment_location.get("fixed_departure"))
+
+                if fixed_departure is not None and parse_time(segment_location.get("fixed_arrival")) is not None:
+                    duration_value = max(0, fixed_departure - predicted)
+                    duration_info = {
+                        "value": duration_value,
+                        "min": duration_value,
+                        "max": duration_value,
+                    }
+                else:
+                    duration_info = value_with_margin(
+                        segment_location["duration"],
+                        segment_location["duration_variation"],
+                        randomize_enabled,
+                    )
+
+                travel_info = value_with_margin(
+                    segment_location["travel"],
+                    segment_location["travel_variation"],
+                    randomize_enabled,
+                )
+
+                segment_items.append(
                     {
-                        "type": "invalid_fixed_time",
-                        "location": location["name"],
-                        "message": f"{location['name']} tem saída fixa antes da chegada.",
+                        "location": segment_location,
+                        "duration": duration_info,
+                        "travel": travel_info,
                     }
                 )
-                departure = arrival
 
-            duration = departure - arrival
-        else:
-            duration = randomize_minutes(
-                location["duration"],
-                location["duration_variation"],
-                randomize_enabled,
-            )
-            departure = arrival + duration
+                if duration_info["max"] > duration_info["min"]:
+                    adjustable_elements.append(duration_info)
 
-        if duration <= 0:
-            warnings.append(
-                {
-                    "type": "empty_duration",
-                    "location": location["name"],
-                    "message": f"{location['name']} está sem duração válida.",
-                }
-            )
+                if travel_info["max"] > travel_info["min"]:
+                    adjustable_elements.append(travel_info)
 
-        travel = 0
+                predicted += duration_info["value"] + travel_info["value"]
 
-        if index < len(locations) - 1:
-            travel = randomize_minutes(
-                location["travel"],
-                location["travel_variation"],
-                randomize_enabled,
-            )
+            delta = target_arrival - predicted
+            not_distributed = distribute_delta(adjustable_elements, delta)
 
-        calculated.append(
-            {
-                "name": location["name"],
-                "arrival": format_time(arrival),
-                "departure": format_time(departure),
-                "duration": duration,
-                "duration_formatted": format_duration(duration),
-                "travel": travel,
-                "travel_formatted": format_duration(travel),
-                "notes": location.get("notes", ""),
-            }
-        )
+            if not_distributed > 0:
+                warnings.append(
+                    {
+                        "type": "empty_time",
+                        "location": target_location["name"],
+                        "message": f"Mesmo usando as margens, ainda sobra {format_duration(not_distributed)} antes de {target_location['name']}.",
+                    }
+                )
 
-        total_work += max(0, duration)
-        total_travel += max(0, travel)
+            elif not_distributed < 0:
+                warnings.append(
+                    {
+                        "type": "overlap_time",
+                        "location": target_location["name"],
+                        "message": f"Mesmo reduzindo as margens, faltam {format_duration(abs(not_distributed))} para chegar em {target_location['name']} no horário fixo.",
+                    }
+                )
 
-        current = departure + travel
+            for item in segment_items:
+                arrival = current
+                duration = item["duration"]["value"]
+                travel = item["travel"]["value"]
+
+                if duration <= 0:
+                    warnings.append(
+                        {
+                            "type": "empty_duration",
+                            "location": item["location"]["name"],
+                            "message": f"{item['location']['name']} está sem duração válida.",
+                        }
+                    )
+
+                append_calculated(item["location"], arrival, duration, travel)
+
+                current = arrival + duration + travel
+
+            current = target_arrival
+            index = target_index
+            continue
+
+        while index < len(locations):
+            location = locations[index]
+
+            fixed_arrival = parse_time(location.get("fixed_arrival"))
+            fixed_departure = parse_time(location.get("fixed_departure"))
+
+            if fixed_arrival is not None:
+                if fixed_arrival > current:
+                    warnings.append(
+                        {
+                            "type": "empty_time",
+                            "location": location["name"],
+                            "message": f"Tempo vazio de {format_duration(fixed_arrival - current)} antes de {location['name']}.",
+                        }
+                    )
+                elif fixed_arrival < current:
+                    warnings.append(
+                        {
+                            "type": "overlap_time",
+                            "location": location["name"],
+                            "message": f"{location['name']} começa {format_duration(current - fixed_arrival)} antes do horário possível.",
+                        }
+                    )
+
+                current = fixed_arrival
+
+            arrival = current
+
+            if fixed_departure is not None:
+                departure = fixed_departure
+
+                if departure < arrival:
+                    warnings.append(
+                        {
+                            "type": "invalid_fixed_time",
+                            "location": location["name"],
+                            "message": f"{location['name']} tem saída fixa antes da chegada.",
+                        }
+                    )
+
+                    departure = arrival
+
+                duration = departure - arrival
+            else:
+                duration = randomize_minutes(
+                    location["duration"],
+                    location["duration_variation"],
+                    randomize_enabled,
+                )
+
+                departure = arrival + duration
+
+            if duration <= 0:
+                warnings.append(
+                    {
+                        "type": "empty_duration",
+                        "location": location["name"],
+                        "message": f"{location['name']} está sem duração válida.",
+                    }
+                )
+
+            if index < len(locations) - 1:
+                travel = randomize_minutes(
+                    location["travel"],
+                    location["travel_variation"],
+                    randomize_enabled,
+                )
+            else:
+                travel = 0
+
+            append_calculated(location, arrival, duration, travel)
+
+            current = departure + travel
+            index += 1
+
+        break
+
+    first_arrival = parse_time(calculated[0]["arrival"]) if calculated else current
 
     return {
         "label": day.get("label", ""),
         "start_time": format_time(start),
-        "real_start_time": format_time(parse_time(day.get("start_time")) or 0),
-        "calculated_start_time": format_time(
-            parse_time(calculated[0]["arrival"]) if calculated else current
-        ),
+        "real_start_time": format_time(start),
+        "calculated_start_time": format_time(first_arrival),
         "locations": calculated,
         "total_work": total_work,
         "total_work_formatted": format_duration(total_work),
@@ -293,6 +545,7 @@ def calculate_day(day: Dict[str, Any], randomize_enabled: bool = True) -> Dict[s
         "end_time": format_time(current if calculated else start),
         "warnings": warnings,
     }
+
 
 
 def calculate_week(data: Dict[str, Any], force_random: Optional[bool] = None) -> Dict[str, Any]:
@@ -550,4 +803,36 @@ async def api_backup_restore(payload: Dict[str, Any]):
     return {
         "ok": True,
         "data": data,
+    }
+
+@app.post("/api/automation/send_week_report")
+async def api_automation_send_week_report(payload: Dict[str, Any]):
+    options = load_options()
+
+    configured_token = str(options.get("automation_token") or "").strip()
+    received_token = str(payload.get("token") or "").strip()
+
+    if configured_token and received_token != configured_token:
+        raise HTTPException(status_code=401, detail="Token de automação inválido.")
+
+    data = load_data()
+
+    force_random = payload.get("force_random")
+
+    report = generate_week_report(data, force_random)
+
+    subject = (
+        payload.get("subject")
+        or options.get("automation_subject")
+        or f"Relatório semanal - Journée - {datetime.now().strftime('%d/%m/%Y')}"
+    )
+
+    recipients = payload.get("recipients") or options.get("default_recipients", [])
+
+    result = send_email(subject, report, recipients)
+
+    return {
+        "ok": True,
+        "message": "Relatório semanal enviado por automação.",
+        "email": result,
     }

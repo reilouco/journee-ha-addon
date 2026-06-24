@@ -31,6 +31,7 @@ const els = {
   backupList: document.getElementById("backupList"),
   restoreBtn: document.getElementById("restoreBtn"),
   toast: document.getElementById("toast"),
+  locationSuggestions: document.getElementById("locationSuggestions"),
 };
 
 function toast(message) {
@@ -110,8 +111,46 @@ function emptyLocation() {
     notes: "",
   };
 }
+function getKnownLocationNames() {
+  const names = new Set();
+
+  dayOrder.forEach(([dayKey]) => {
+    const day = data.days[dayKey];
+
+    if (!day || !Array.isArray(day.locations)) {
+      return;
+    }
+
+    day.locations.forEach((location) => {
+      const name = String(location.name || "").trim();
+
+      if (name) {
+        names.add(name);
+      }
+    });
+  });
+
+  return Array.from(names).sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function renderLocationSuggestions() {
+  if (!els.locationSuggestions) {
+    return;
+  }
+
+  const names = getKnownLocationNames();
+
+  els.locationSuggestions.innerHTML = "";
+
+  names.forEach((name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    els.locationSuggestions.appendChild(option);
+  });
+}
 
 function renderDay() {
+  renderLocationSuggestions();
   const day = data.days[activeDay];
 
   els.dayTitle.textContent = day.label;
@@ -124,7 +163,7 @@ function renderDay() {
     const tr = document.createElement("tr");
 
     tr.innerHTML = `
-      <td><input data-field="name" type="text" value="${escapeHtml(location.name || "")}"></td>
+      <td><input data-field="name" list="locationSuggestions" type="text" value="${escapeHtml(location.name || "")}"></td>
       <td><input data-field="duration" type="number" min="0" step="1" value="${location.duration || 0}"></td>
       <td><input data-field="duration_variation" type="number" min="0" step="1" value="${location.duration_variation || 0}"></td>
       <td><input data-field="travel" type="number" min="0" step="1" value="${location.travel || 0}"></td>
@@ -143,14 +182,19 @@ function renderDay() {
       input.addEventListener("input", () => {
         const field = input.dataset.field;
         const numericFields = ["duration", "duration_variation", "travel", "travel_variation"];
-
+    
         if (numericFields.includes(field)) {
           location[field] = Number(input.value || 0);
         } else {
           location[field] = input.value;
         }
+    
+        if (field === "name") {
+          renderLocationSuggestions();
+        }
       });
     });
+    
 
     tr.querySelector('[data-action="remove"]').addEventListener("click", () => {
       day.locations.splice(index, 1);
