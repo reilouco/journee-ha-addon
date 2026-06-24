@@ -1,0 +1,41 @@
+name: Journée HA
+version: "1.0.0"
+slug: journee_ha
+description: Calculadora de horários de trabalho para Home Assistant
+url: https://github.com/seu-usuario/journee-ha-addon
+arch:
+  - amd64
+  - aarch64
+  - armv7
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8090
+panel_icon: mdi:calendar-clock
+panel_title: Journée
+ports:
+  8090/tcp: null
+map:
+  - addon_config:rw
+options:
+  smtp_enabled: false
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  smtp_user: ""
+  smtp_password: ""
+  smtp_from: ""
+  smtp_from_name: "Journée HA"
+  smtp_use_tls: true
+  default_recipients: []
+schema:
+  smtp_enabled: bool
+  smtp_host: str
+  smtp_port: int
+  smtp_user: str
+  smtp_password: password
+  smtp_from: str
+  smtp_from_name: str
+  smtp_use_tls: bool
+  default_recipients:
+    - str

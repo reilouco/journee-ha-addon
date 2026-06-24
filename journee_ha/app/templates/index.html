@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Journée HA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <div>
+        <h1>Journée HA</h1>
+        <p>Calculadora semanal de horários para Home Assistant</p>
+      </div>
+
+      <div class="header-actions">
+        <button id="saveBtn">Salvar</button>
+        <button id="reportBtn" class="primary">Gerar relatório</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>Configurações do relatório</h2>
+
+      <div class="grid">
+        <label>
+          Período
+          <input id="reportPeriod" type="text" placeholder="24/06/2026">
+        </label>
+
+        <label class="checkbox">
+          <input id="randomize" type="checkbox">
+          Usar variações aleatórias
+        </label>
+      </div>
+    </section>
+
+    <section class="tabs" id="dayTabs"></section>
+
+    <section class="card">
+      <div class="day-header">
+        <h2 id="dayTitle">Dia</h2>
+
+        <div class="grid small">
+          <label>
+            Início
+            <input id="startTime" type="time">
+          </label>
+
+          <label>
+            Variação início, min
+            <input id="startVariation" type="number" min="0" step="1">
+          </label>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Local</th>
+              <th>Duração</th>
+              <th>Var.</th>
+              <th>Desloc.</th>
+              <th>Var.</th>
+              <th>Chegada fixa</th>
+              <th>Saída fixa</th>
+              <th>Obs.</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="locationsBody"></tbody>
+        </table>
+      </div>
+
+      <div class="row-actions">
+        <button id="addLocationBtn">Adicionar local</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Relatório semanal</h2>
+
+      <div class="email-row">
+        <label>
+          Assunto do email
+          <input id="emailSubject" type="text">
+        </label>
+
+        <label>
+          Destinatários
+          <input id="emailRecipients" type="text" placeholder="email1@exemplo.com, email2@exemplo.com">
+        </label>
+      </div>
+
+      <textarea id="reportText" spellcheck="false"></textarea>
+
+      <div class="row-actions">
+        <button id="copyBtn">Copiar relatório</button>
+        <button id="emailBtn">Enviar por email</button>
+      </div>
+
+      <p class="hint">
+        Para email funcionar, configure SMTP nas opções do add-on no Home Assistant.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Backup</h2>
+
+      <div class="backup-row">
+        <input id="backupName" type="text" placeholder="nome_do_backup">
+        <button id="backupBtn">Criar backup</button>
+        <select id="backupList"></select>
+        <button id="restoreBtn">Restaurar</button>
+      </div>
+    </section>
+
+    <div id="toast"></div>
+  </main>
+
+  <script src="static/app.js"></script>
+</body>
+</html>
