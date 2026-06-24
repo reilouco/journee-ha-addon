@@ -1,15 +1,17 @@
 name: Journée HA
-version: "1.1.0"
+version: "1.1.1"
 slug: journee_ha
 description: Calculadora de horários de trabalho para Home Assistant
-url: https://github.com/seu-usuario/journee-ha-addon
+url: https://github.com/reilouco/journee-ha-addon
+
 arch:
   - amd64
   - aarch64
-  - armv7
+
 startup: application
 boot: auto
 init: false
+
 ingress: true
 ingress_port: 8090
 panel_icon: mdi:calendar-clock
