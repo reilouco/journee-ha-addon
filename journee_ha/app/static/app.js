@@ -251,176 +251,136 @@ function renderDay() {
     row.className = "location-card-row";
     row.dataset.locationId = location._id;
 
-    const fixedEnabled = Boolean(location.fixed_arrival || location.fixed_departure);
-
     row.innerHTML = `
-      <td colspan="9">
-        <article class="location-card" data-location-id="${escapeHtml(location._id)}">
-          <header class="location-header">
-            <div class="location-title">
-              <span class="location-number">${index + 1}</span>
-              <strong>Local ${index + 1}</strong>
-            </div>
+      <td class="cell-local" data-label="Local">
+        <div class="location-line">
+          <span class="location-number">${index + 1}</span>
 
-            <div class="location-actions">
-              <button
-                type="button"
-                class="drag-handle"
-                data-action="drag"
-                title="Segure e arraste para mudar a posição"
-                aria-label="Arrastar local"
-              >
-                ↕
-              </button>
+          <input
+            data-field="name"
+            list="locationSuggestions"
+            type="text"
+            value="${escapeHtml(location.name || "")}"
+            placeholder="Ex: 33 Poniatowski"
+          >
+        </div>
+      </td>
 
-              <button
-                type="button"
-                class="move-btn"
-                data-action="up"
-                title="Mover para cima"
-                aria-label="Mover para cima"
-                ${index === 0 ? "disabled" : ""}
-              >
-                ↑
-              </button>
+      <td class="cell-duration" data-label="Duração">
+        <input
+          data-field="duration"
+          type="number"
+          min="0"
+          step="1"
+          value="${Number(location.duration || 0)}"
+          title="Duração em minutos"
+        >
+      </td>
 
-              <button
-                type="button"
-                class="move-btn"
-                data-action="down"
-                title="Mover para baixo"
-                aria-label="Mover para baixo"
-                ${index >= day.locations.length - 1 ? "disabled" : ""}
-              >
-                ↓
-              </button>
-            </div>
-          </header>
+      <td class="cell-var" data-label="Var. duração">
+        <input
+          data-field="duration_variation"
+          type="number"
+          min="0"
+          step="1"
+          value="${Number(location.duration_variation || 0)}"
+          title="Variação da duração em minutos"
+        >
+      </td>
 
-          <div class="location-grid">
-            <div class="field field-name">
-              <label>Nome do Local</label>
-              <input
-                data-field="name"
-                list="locationSuggestions"
-                type="text"
-                value="${escapeHtml(location.name || "")}"
-                placeholder="Ex: 33 Poniatowski"
-              >
-            </div>
+      <td class="cell-travel" data-label="Desloc.">
+        <input
+          data-field="travel"
+          type="number"
+          min="0"
+          step="1"
+          value="${Number(location.travel || 0)}"
+          title="Tempo de deslocamento até o próximo local"
+        >
+      </td>
 
-            <div class="field field-notes">
-              <label>Observação</label>
-              <input
-                data-field="notes"
-                type="text"
-                value="${escapeHtml(location.notes || "")}"
-                placeholder="Observações opcional"
-              >
-            </div>
-          </div>
+      <td class="cell-var" data-label="Var. desloc.">
+        <input
+          data-field="travel_variation"
+          type="number"
+          min="0"
+          step="1"
+          value="${Number(location.travel_variation || 0)}"
+          title="Variação do deslocamento em minutos"
+        >
+      </td>
 
-          <section class="location-section">
-            <div class="location-section-title">Tempo no Local</div>
+      <td class="cell-time" data-label="Chegada fixa">
+        <input
+          data-field="fixed_arrival"
+          type="time"
+          value="${escapeHtml(location.fixed_arrival || "")}"
+          title="Se preenchido, força a chegada neste horário"
+        >
+      </td>
 
-            <div class="switch-row">
-              <span>Usar horários fixos, substitui duração</span>
+      <td class="cell-time" data-label="Saída fixa">
+        <input
+          data-field="fixed_departure"
+          type="time"
+          value="${escapeHtml(location.fixed_departure || "")}"
+          title="Se preenchido, força a saída neste horário"
+        >
+      </td>
 
-              <label class="switch">
-                <input
-                  data-field="fixed_enabled"
-                  type="checkbox"
-                  ${fixedEnabled ? "checked" : ""}
-                >
-                <span class="switch-slider"></span>
-              </label>
-            </div>
+      <td class="cell-notes" data-label="Obs.">
+        <input
+          data-field="notes"
+          type="text"
+          value="${escapeHtml(location.notes || "")}"
+          placeholder="Opcional"
+        >
+      </td>
 
-            <div class="location-grid two-columns">
-              <div class="field">
-                <label>Duração</label>
-                <input
-                  data-field="duration"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value="${location.duration || 0}"
-                  ${fixedEnabled ? "disabled" : ""}
-                >
-                <small>Em minutos. Ex: 90, 120, 150</small>
-              </div>
+      <td class="cell-actions" data-label="Ações">
+        <div class="action-group">
+          <button
+            type="button"
+            class="drag-handle"
+            data-action="drag"
+            title="Arrastar"
+            aria-label="Arrastar local"
+          >
+            ↕
+          </button>
 
-              <div class="field">
-                <label>Variação ± min</label>
-                <input
-                  data-field="duration_variation"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value="${location.duration_variation || 0}"
-                  ${fixedEnabled ? "disabled" : ""}
-                >
-              </div>
-            </div>
+          <button
+            type="button"
+            class="move-btn"
+            data-action="up"
+            title="Mover para cima"
+            aria-label="Mover para cima"
+            ${index === 0 ? "disabled" : ""}
+          >
+            ↑
+          </button>
 
-            <div class="location-grid two-columns fixed-time-fields ${fixedEnabled ? "" : "hidden"}">
-              <div class="field">
-                <label>Chegada fixa</label>
-                <input
-                  data-field="fixed_arrival"
-                  type="time"
-                  value="${location.fixed_arrival || ""}"
-                >
-              </div>
-
-              <div class="field">
-                <label>Saída fixa</label>
-                <input
-                  data-field="fixed_departure"
-                  type="time"
-                  value="${location.fixed_departure || ""}"
-                >
-              </div>
-            </div>
-          </section>
-
-          <section class="location-section">
-            <div class="location-section-title">Deslocamento</div>
-
-            <div class="location-grid two-columns">
-              <div class="field">
-                <label>Deslocamento</label>
-                <input
-                  data-field="travel"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value="${location.travel || 0}"
-                >
-                <small>Tempo para chegar ao próximo local, em minutos</small>
-              </div>
-
-              <div class="field">
-                <label>Variação ± min</label>
-                <input
-                  data-field="travel_variation"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value="${location.travel_variation || 0}"
-                >
-              </div>
-            </div>
-          </section>
+          <button
+            type="button"
+            class="move-btn"
+            data-action="down"
+            title="Mover para baixo"
+            aria-label="Mover para baixo"
+            ${index >= day.locations.length - 1 ? "disabled" : ""}
+          >
+            ↓
+          </button>
 
           <button
             type="button"
             class="remove-location-btn danger"
             data-action="remove"
+            title="Remover"
+            aria-label="Remover local"
           >
-            Remover Local
+            ×
           </button>
-        </article>
+        </div>
       </td>
     `;
 
@@ -765,19 +725,30 @@ async function renameBackup() {
     return;
   }
 
-  const newName = prompt("Novo nome para o backup:", filename);
+  const suggestedName = filename.replace(/\.json$/i, "");
+  const newName = prompt("Novo nome para o backup:", suggestedName);
 
   if (!newName || !newName.trim()) {
     return;
   }
 
-  await api("api/backup/rename", {
+  const result = await api("api/backup/rename", {
     method: "POST",
     body: JSON.stringify({
       filename,
       new_name: newName.trim(),
     }),
   });
+
+  await loadBackups();
+
+  if (result.new_file) {
+    els.backupList.value = result.new_file;
+  }
+
+  toast("Backup renomeado");
+}
+
 
   await loadBackups();
 
