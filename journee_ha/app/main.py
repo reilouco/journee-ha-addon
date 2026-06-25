@@ -7,6 +7,7 @@ from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -19,6 +20,7 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = Path("/data")
 DATA_FILE = DATA_DIR / "journee_data.json"
 OPTIONS_FILE = DATA_DIR / "options.json"
+BACKUP_DIR = DATA_DIR / "backups"
 
 if not DATA_DIR.exists():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -57,7 +59,35 @@ def default_data() -> Dict[str, Any]:
     }
 
 
+def to_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value or default)
+    except Exception:
+        return default
+
+
+def clean_location(location: Dict[str, Any]) -> Dict[str, Any]:
+    location_id = str(location.get("_id") or "").strip()
+
+    if not location_id:
+        location_id = str(uuid4())
+
+    return {
+        "_id": location_id,
+        "name": str(location.get("name", "")).strip(),
+        "duration": to_int(location.get("duration")),
+        "duration_variation": to_int(location.get("duration_variation")),
+        "travel": to_int(location.get("travel")),
+        "travel_variation": to_int(location.get("travel_variation")),
+        "fixed_arrival": str(location.get("fixed_arrival", "")).strip(),
+        "fixed_departure": str(location.get("fixed_departure", "")).strip(),
+        "notes": str(location.get("notes", "")).strip(),
+    }
+
+
 def load_data() -> Dict[str, Any]:
+    changed = False
+
     if not DATA_FILE.exists():
         data = default_data()
         save_data(data)
@@ -69,26 +99,61 @@ def load_data() -> Dict[str, Any]:
     except Exception:
         data = default_data()
         save_data(data)
+        return data
 
     base = default_data()
 
     for key, value in base.items():
         if key not in data:
             data[key] = value
+            changed = True
+
+    if "settings" not in data or not isinstance(data["settings"], dict):
+        data["settings"] = base["settings"]
+        changed = True
+
+    if "days" not in data or not isinstance(data["days"], dict):
+        data["days"] = base["days"]
+        changed = True
 
     for day_key, day_label in DAYS:
-        if day_key not in data["days"]:
+        if day_key not in data["days"] or not isinstance(data["days"][day_key], dict):
             data["days"][day_key] = base["days"][day_key]
+            changed = True
 
-        data["days"][day_key]["label"] = day_label
+        day = data["days"][day_key]
 
-        if "locations" not in data["days"][day_key]:
-            data["days"][day_key]["locations"] = []
+        if day.get("label") != day_label:
+            day["label"] = day_label
+            changed = True
+
+        if "start_time" not in day:
+            day["start_time"] = "07:30"
+            changed = True
+
+        if "start_variation" not in day:
+            day["start_variation"] = 0
+            changed = True
+
+        if "locations" not in day or not isinstance(day["locations"], list):
+            day["locations"] = []
+            changed = True
+
+        cleaned_locations = [clean_location(item) for item in day.get("locations", []) if isinstance(item, dict)]
+
+        if cleaned_locations != day.get("locations", []):
+            day["locations"] = cleaned_locations
+            changed = True
+
+    if changed:
+        save_data(data)
 
     return data
 
 
 def save_data(data: Dict[str, Any]) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
     with open(DATA_FILE, "w", encoding="utf-8") as file:
         json.dump(data, file, ensure_ascii=False, indent=2)
 
@@ -167,17 +232,6 @@ def randomize_minutes(base: int, variation: int, enabled: bool) -> int:
     return max(0, base + random.randint(-variation, variation))
 
 
-def clean_location(location: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "name": str(location.get("name", "")).strip(),
-        "duration": int(location.get("duration") or 0),
-        "duration_variation": int(location.get("duration_variation") or 0),
-        "travel": int(location.get("travel") or 0),
-        "travel_variation": int(location.get("travel_variation") or 0),
-        "fixed_arrival": str(location.get("fixed_arrival", "")).strip(),
-        "fixed_departure": str(location.get("fixed_departure", "")).strip(),
-        "notes": str(location.get("notes", "")).strip(),
-    }
 def value_with_margin(base: int, variation: int, enabled: bool) -> Dict[str, int]:
     base = int(base or 0)
     variation = int(variation or 0)
@@ -307,7 +361,7 @@ def calculate_day(day: Dict[str, Any], randomize_enabled: bool = True) -> Dict[s
     total_travel = 0
 
     raw_locations = day.get("locations", [])
-    locations = [clean_location(item) for item in raw_locations]
+    locations = [clean_location(item) for item in raw_locations if isinstance(item, dict)]
     locations = [item for item in locations if item["name"]]
 
     def append_calculated(location: Dict[str, Any], arrival: int, duration: int, travel: int) -> None:
@@ -317,6 +371,7 @@ def calculate_day(day: Dict[str, Any], randomize_enabled: bool = True) -> Dict[s
 
         calculated.append(
             {
+                "_id": location.get("_id", ""),
                 "name": location["name"],
                 "arrival": format_time(arrival),
                 "departure": format_time(departure),
@@ -547,7 +602,6 @@ def calculate_day(day: Dict[str, Any], randomize_enabled: bool = True) -> Dict[s
     }
 
 
-
 def calculate_week(data: Dict[str, Any], force_random: Optional[bool] = None) -> Dict[str, Any]:
     randomize_enabled = bool(data.get("settings", {}).get("randomize", True))
 
@@ -672,6 +726,59 @@ def send_email(subject: str, body: str, recipients: List[str]) -> Dict[str, Any]
     }
 
 
+def ensure_backup_dir() -> None:
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def sanitize_backup_name(name: str) -> str:
+    raw_name = str(name or "").strip()
+
+    if raw_name.endswith(".json"):
+        raw_name = raw_name[:-5]
+
+    safe_name = "".join(
+        char for char in raw_name
+        if char.isalnum() or char in ("-", "_")
+    ).strip()
+
+    if not safe_name:
+        safe_name = datetime.now().strftime("backup_%Y%m%d_%H%M%S")
+
+    return f"{safe_name}.json"
+
+
+def get_backup_file(filename: str) -> Path:
+    ensure_backup_dir()
+
+    filename = str(filename or "").strip()
+
+    if not filename:
+        raise HTTPException(status_code=400, detail="Nome do backup não informado.")
+
+    if filename != Path(filename).name:
+        raise HTTPException(status_code=400, detail="Nome de backup inválido.")
+
+    if not filename.endswith(".json"):
+        raise HTTPException(status_code=400, detail="O backup precisa ser um arquivo .json.")
+
+    backup_file = BACKUP_DIR / filename
+
+    try:
+        resolved_backup_dir = BACKUP_DIR.resolve()
+        resolved_backup_file = backup_file.resolve()
+
+        if not resolved_backup_file.is_relative_to(resolved_backup_dir):
+            raise HTTPException(status_code=400, detail="Caminho de backup inválido.")
+    except AttributeError:
+        resolved_backup_dir = str(BACKUP_DIR.resolve())
+        resolved_backup_file = str(backup_file.resolve())
+
+        if not resolved_backup_file.startswith(resolved_backup_dir):
+            raise HTTPException(status_code=400, detail="Caminho de backup inválido.")
+
+    return backup_file
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(
@@ -702,8 +809,8 @@ async def api_save_data(payload: Dict[str, Any]):
         data["days"][day_key] = {
             "label": day_label,
             "start_time": day.get("start_time") or "07:30",
-            "start_variation": int(day.get("start_variation") or 0),
-            "locations": [clean_location(item) for item in day.get("locations", [])],
+            "start_variation": to_int(day.get("start_variation")),
+            "locations": [clean_location(item) for item in day.get("locations", []) if isinstance(item, dict)],
         }
 
     save_data(data)
@@ -749,15 +856,16 @@ async def api_backup_create(payload: Dict[str, Any]):
     data = load_data()
 
     name = payload.get("name") or datetime.now().strftime("backup_%Y%m%d_%H%M%S")
-    safe_name = "".join(char for char in name if char.isalnum() or char in ("-", "_")).strip()
+    filename = sanitize_backup_name(name)
 
-    if not safe_name:
-        safe_name = datetime.now().strftime("backup_%Y%m%d_%H%M%S")
+    ensure_backup_dir()
 
-    backup_dir = DATA_DIR / "backups"
-    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_file = BACKUP_DIR / filename
 
-    backup_file = backup_dir / f"{safe_name}.json"
+    if backup_file.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stem = backup_file.stem
+        backup_file = BACKUP_DIR / f"{stem}_{timestamp}.json"
 
     with open(backup_file, "w", encoding="utf-8") as file:
         json.dump(data, file, ensure_ascii=False, indent=2)
@@ -770,11 +878,10 @@ async def api_backup_create(payload: Dict[str, Any]):
 
 @app.get("/api/backup/list")
 async def api_backup_list():
-    backup_dir = DATA_DIR / "backups"
-    backup_dir.mkdir(parents=True, exist_ok=True)
+    ensure_backup_dir()
 
     files = sorted(
-        [item.name for item in backup_dir.glob("*.json")],
+        [item.name for item in BACKUP_DIR.glob("*.json") if item.is_file()],
         reverse=True,
     )
 
@@ -787,16 +894,16 @@ async def api_backup_list():
 async def api_backup_restore(payload: Dict[str, Any]):
     filename = payload.get("filename")
 
-    if not filename:
-        raise HTTPException(status_code=400, detail="Nome do backup não informado.")
-
-    backup_file = DATA_DIR / "backups" / filename
+    backup_file = get_backup_file(filename)
 
     if not backup_file.exists():
         raise HTTPException(status_code=404, detail="Backup não encontrado.")
 
-    with open(backup_file, "r", encoding="utf-8") as file:
-        data = json.load(file)
+    try:
+        with open(backup_file, "r", encoding="utf-8") as file:
+            data = json.load(file)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Backup inválido ou corrompido.")
 
     save_data(data)
 
@@ -804,6 +911,49 @@ async def api_backup_restore(payload: Dict[str, Any]):
         "ok": True,
         "data": data,
     }
+
+
+@app.post("/api/backup/rename")
+async def api_backup_rename(payload: Dict[str, Any]):
+    filename = payload.get("filename")
+    new_name = payload.get("new_name")
+
+    old_file = get_backup_file(filename)
+
+    if not old_file.exists():
+        raise HTTPException(status_code=404, detail="Backup não encontrado.")
+
+    new_filename = sanitize_backup_name(new_name)
+    new_file = BACKUP_DIR / new_filename
+
+    if new_file.exists():
+        raise HTTPException(status_code=409, detail="Já existe um backup com esse nome.")
+
+    old_file.rename(new_file)
+
+    return {
+        "ok": True,
+        "old_file": old_file.name,
+        "new_file": new_file.name,
+    }
+
+
+@app.delete("/api/backup/delete")
+async def api_backup_delete(payload: Dict[str, Any]):
+    filename = payload.get("filename")
+
+    backup_file = get_backup_file(filename)
+
+    if not backup_file.exists():
+        raise HTTPException(status_code=404, detail="Backup não encontrado.")
+
+    backup_file.unlink()
+
+    return {
+        "ok": True,
+        "deleted": backup_file.name,
+    }
+
 
 @app.post("/api/automation/send_week_report")
 async def api_automation_send_week_report(payload: Dict[str, Any]):
