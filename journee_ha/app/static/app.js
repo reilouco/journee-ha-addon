@@ -97,6 +97,12 @@
     els.restoreBtn.addEventListener("click", () => {
       restoreBackup().catch((error) => toast(error.message));
     });
+
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".combo-wrap")) {
+        closeAllNameMenus();
+      }
+    });    
   }
 
   function toast(message) {
@@ -344,14 +350,34 @@
           <div class="location-main-grid">
             <label>
               Nome do local
-              <input
-                data-field="name"
-                list="locationSuggestions"
-                type="text"
-                value="${escapeHtml(location.name)}"
-                placeholder="Ex: Cliente A, Escritório"
-              >
+
+              <div class="combo-wrap">
+                <input
+                  data-field="name"
+                  type="text"
+                  value="${escapeHtml(location.name)}"
+                  placeholder="Ex: Cliente A, Escritório"
+                  autocomplete="new-password"
+                  autocorrect="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  name="local_${escapeHtml(location._id)}"
+                >
+
+                <button
+                  type="button"
+                  class="combo-arrow"
+                  data-action="name-suggestions"
+                  title="Mostrar locais já usados"
+                  aria-label="Mostrar locais já usados"
+                >
+                  ▾
+                </button>
+
+                <div class="suggestions-menu" hidden></div>
+              </div>
             </label>
+
 
             <label>
               Observação
@@ -477,6 +503,8 @@
   }
 
   function bindLocationCardEvents(card, location, index, day) {
+    setupNameSuggestions(card, location, index);
+  
     card.querySelectorAll("input[data-field]").forEach((input) => {
       input.addEventListener("input", () => {
         const field = input.dataset.field;
@@ -890,6 +918,127 @@
 
     return Array.from(names).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }
+
+  function setupNameSuggestions(card, location, index) {
+    const input = card.querySelector('input[data-field="name"]');
+    const button = card.querySelector('[data-action="name-suggestions"]');
+    const menu = card.querySelector(".suggestions-menu");
+  
+    if (!input || !button || !menu) {
+      return;
+    }
+  
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+  
+      if (!menu.hidden) {
+        menu.hidden = true;
+        return;
+      }
+  
+      openNameSuggestions(menu, input, location, index, true);
+    });
+  
+    input.addEventListener("input", () => {
+      const typed = input.value.trim();
+  
+      if (!typed) {
+        menu.hidden = true;
+        return;
+      }
+  
+      openNameSuggestions(menu, input, location, index, false);
+    });
+  
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        openNameSuggestions(menu, input, location, index, true);
+      }
+  
+      if (event.key === "Escape") {
+        menu.hidden = true;
+      }
+    });
+  }
+  
+  function openNameSuggestions(menu, input, location, index, showAll) {
+    closeAllNameMenus();
+  
+    const currentValue = input.value.trim();
+    const allNames = getKnownLocationNames();
+  
+    let names = allNames;
+  
+    if (!showAll && currentValue) {
+      const search = normalizeSearch(currentValue);
+  
+      names = allNames.filter((name) => {
+        return normalizeSearch(name).includes(search);
+      });
+    }
+  
+    renderNameSuggestionMenu(menu, names, input, location, index);
+  }
+  
+  function renderNameSuggestionMenu(menu, names, input, location, index) {
+    menu.innerHTML = "";
+  
+    if (!names.length) {
+      const empty = document.createElement("div");
+      empty.className = "suggestion-empty";
+      empty.textContent = "Nenhum local salvo ainda";
+      menu.appendChild(empty);
+      menu.hidden = false;
+      return;
+    }
+  
+    names.forEach((name) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "suggestion-item";
+      item.textContent = name;
+  
+      item.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+      });
+  
+      item.addEventListener("click", () => {
+        location.name = name;
+        input.value = name;
+  
+        const preview = input
+          .closest(".location-card")
+          ?.querySelector(".location-name-preview");
+  
+        if (preview) {
+          preview.textContent = name || `Local ${index + 1}`;
+        }
+  
+        menu.hidden = true;
+        renderLocationSuggestions();
+      });
+  
+      menu.appendChild(item);
+    });
+  
+    menu.hidden = false;
+  }
+  
+  function closeAllNameMenus() {
+    document.querySelectorAll(".suggestions-menu").forEach((menu) => {
+      menu.hidden = true;
+    });
+  }
+  
+  function normalizeSearch(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  }
+  
 
   function renderLocationSuggestions() {
     if (!els.locationSuggestions || !data) {
