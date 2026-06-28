@@ -292,7 +292,7 @@ button.danger:hover {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: #ffffff;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 5px 15px rgba(15, 23, 42, 0.04);
 }
 
@@ -639,4 +639,71 @@ button.danger:hover {
   .position-row {
     grid-template-columns: 1fr;
   }
+}
+
+.combo-wrap {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 38px;
+  width: 100%;
+}
+
+.combo-wrap input {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.combo-arrow {
+  min-width: 38px;
+  width: 38px;
+  padding: 0;
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  background: #ffffff;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.combo-arrow:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.suggestions-menu {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  max-height: 230px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.18);
+  padding: 6px;
+}
+
+.suggestion-item {
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-weight: 750;
+}
+
+.suggestion-item:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.suggestion-empty {
+  padding: 10px;
+  color: var(--muted);
+  font-size: 0.86rem;
 }
