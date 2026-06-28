@@ -4,8 +4,10 @@
   <meta charset="utf-8">
   <title>Journée HA</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="static/style.css">
+
+  <link rel="stylesheet" href="static/style.css?v=1.3.0">
 </head>
+
 <body>
   <main class="app">
     <header class="header">
@@ -15,15 +17,15 @@
       </div>
 
       <div class="header-actions">
-        <button id="saveBtn">Salvar</button>
-        <button id="reportBtn" class="primary">Gerar relatório</button>
+        <button id="saveBtn" type="button">Salvar</button>
+        <button id="reportBtn" type="button" class="primary">Gerar relatório</button>
       </div>
     </header>
 
-    <section class="card">
+    <section class="card compact-card">
       <h2>Configurações do relatório</h2>
 
-      <div class="grid">
+      <div class="grid settings-grid">
         <label>
           Período
           <input id="reportPeriod" type="text" placeholder="24/06/2026">
@@ -31,7 +33,7 @@
 
         <label class="checkbox">
           <input id="randomize" type="checkbox">
-          Usar variações aleatórias
+          <span>Usar variações aleatórias</span>
         </label>
       </div>
     </section>
@@ -40,9 +42,12 @@
 
     <section class="card">
       <div class="day-header">
-        <h2 id="dayTitle">Dia</h2>
+        <div>
+          <h2 id="dayTitle">Dia</h2>
+          <p class="subtle">Cadastre os locais na ordem do percurso.</p>
+        </div>
 
-        <div class="grid small">
+        <div class="day-time-grid">
           <label>
             Início
             <input id="startTime" type="time">
@@ -55,27 +60,12 @@
         </div>
       </div>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Local</th>
-              <th>Duração</th>
-              <th>Var.</th>
-              <th>Desloc.</th>
-              <th>Var.</th>
-              <th>Chegada fixa</th>
-              <th>Saída fixa</th>
-              <th>Obs.</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody id="locationsBody"></tbody>
-        </table>
-      </div>
+      <div id="locationsBody" class="locations-list"></div>
 
       <div class="row-actions">
-        <button id="addLocationBtn">Adicionar local</button>
+        <button id="addLocationBtn" type="button" class="add-location">
+          + Adicionar local
+        </button>
       </div>
     </section>
 
@@ -97,8 +87,8 @@
       <textarea id="reportText" spellcheck="false"></textarea>
 
       <div class="row-actions">
-        <button id="copyBtn">Copiar relatório</button>
-        <button id="emailBtn">Enviar por email</button>
+        <button id="copyBtn" type="button">Copiar relatório</button>
+        <button id="emailBtn" type="button">Enviar por email</button>
       </div>
 
       <p class="hint">
@@ -111,9 +101,9 @@
 
       <div class="backup-row">
         <input id="backupName" type="text" placeholder="nome_do_backup">
-        <button id="backupBtn">Criar backup</button>
+        <button id="backupBtn" type="button">Criar backup</button>
         <select id="backupList"></select>
-        <button id="restoreBtn">Restaurar</button>
+        <button id="restoreBtn" type="button">Restaurar</button>
       </div>
     </section>
 
@@ -122,7 +112,6 @@
     <datalist id="locationSuggestions"></datalist>
   </main>
 
-  <script src="static/app.js"></script>
+  <script src="static/app.js?v=1.3.0"></script>
 </body>
 </html>
-
