@@ -651,9 +651,16 @@ def generate_week_report(data: Dict[str, Any], force_random: Optional[bool] = No
             continue
 
         for item in day["locations"]:
-            lines.append(
-                f"{item['name']} | {item['arrival']} - {item['departure']} | {item['duration_formatted']}"
+            line = (
+                f"{item['name']} | {item['arrival']} - {item['departure']} | "
+                f"{item['duration_formatted']}"
             )
+
+            if item.get("notes"):
+                line += f" | Observação: {item['notes']}"
+
+            lines.append(line)
+
 
         lines.append("")
         lines.append(f"Total trabalho: {day['total_work_formatted']}")
