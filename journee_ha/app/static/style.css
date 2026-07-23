@@ -763,4 +763,72 @@
       white-space: normal;
     }
   }
+
+  @media (max-width: 580px) {
+    .location-head {
+      position: relative;
+      display: block;
+      padding-right: 58px;
+    }
+  
+    .location-title {
+      min-height: 34px;
+    }
+  
+    /* Botão de minimizar/restaurar fica fixo no canto superior direito */
+    .location-actions {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+      margin-top: 12px;
+    }
+  
+    .location-actions button {
+      width: 100%;
+      min-width: 0;
+      min-height: 42px;
+      font-size: 1.05rem;
+    }
+  
+    .location-actions button[data-action="toggle-collapse"] {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      width: 38px;
+      min-width: 38px;
+      height: 38px;
+      min-height: 38px;
+      margin: 0;
+      background: var(--primary-soft);
+      border-color: #bfd0ff;
+      color: var(--primary);
+      font-size: 1.25rem;
+    }
+  
+    .location-actions button[data-action="toggle-collapse"]:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+  
+    /* Mantém somente os três demais botões na linha inferior */
+    .location-actions .drag-handle,
+    .location-actions button[data-action="up"],
+    .location-actions button[data-action="down"] {
+      grid-column: span 1;
+    }
+  
+    .location-card.is-collapsed .location-head {
+      display: block;
+      padding-right: 58px;
+    }
+  
+    .location-card.is-collapsed .location-actions {
+      display: grid;
+    }
+  
+    .location-card.is-collapsed .position-row {
+      display: none;
+    }
+  }
   
