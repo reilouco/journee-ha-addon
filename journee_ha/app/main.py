@@ -855,6 +855,13 @@ async def api_email_send(payload: Dict[str, Any]):
 async def api_backup_create(payload: Dict[str, Any]):
     data = load_data()
 
+    # Cria uma cópia para não alterar os dados em uso pelo sistema.
+    backup_data = deepcopy(data)
+
+    # O período é uma informação temporária e não deve entrar no backup.
+    if isinstance(backup_data.get("settings"), dict):
+        backup_data["settings"].pop("report_period", None)
+
     name = payload.get("name") or datetime.now().strftime("backup_%Y%m%d_%H%M%S")
     filename = sanitize_backup_name(name)
 
@@ -868,7 +875,7 @@ async def api_backup_create(payload: Dict[str, Any]):
         backup_file = BACKUP_DIR / f"{stem}_{timestamp}.json"
 
     with open(backup_file, "w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=2)
+        json.dump(backup_data, file, ensure_ascii=False, indent=2)
 
     return {
         "ok": True,
@@ -899,11 +906,27 @@ async def api_backup_restore(payload: Dict[str, Any]):
     if not backup_file.exists():
         raise HTTPException(status_code=404, detail="Backup não encontrado.")
 
+    # Guarda o período atual antes de restaurar o backup.
+    current_data = load_data()
+    current_period = current_data.get("settings", {}).get(
+        "report_period",
+        datetime.now().strftime("%d/%m/%Y"),
+    )
+
     try:
         with open(backup_file, "r", encoding="utf-8") as file:
             data = json.load(file)
     except Exception:
         raise HTTPException(status_code=400, detail="Backup inválido ou corrompido.")
+
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Backup inválido ou corrompido.")
+
+    if not isinstance(data.get("settings"), dict):
+        data["settings"] = {}
+
+    # Ignora qualquer período encontrado, inclusive em backups antigos.
+    data["settings"]["report_period"] = current_period
 
     save_data(data)
 
